@@ -1,0 +1,377 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  allow-serial-runners: true
+linters:
+  default: none
+  enable:
+    - err113
+    - errcheck
+    - exhaustive
+    - forcetypeassert
+    - goconst
+    - gocritic
+    - godot
+    - gosec
+    - govet
+    - importas
+    - ineffassign
+    - lll
+    - misspell
+    - mnd
+    - nolintlint
+    - revive
+    - staticcheck
+    - tagalign
+    - thelper
+    - tparallel
+    - unconvert
+    - unused
+    - usestdlibvars
+    - varnamelen
+    - whitespace
+    - wsl_v5
+  settings:
+    errcheck:
+      # To disable the errcheck built-in exclude list.
+      # See '-excludeonly' option in https://github.com/kisielk/errcheck#excluding-functions for details.
+      # Default: false
+      disable-default-exclusions: false
+      # Report about not checking of errors in type assertions: 'a := b.(MyStruct)'.
+      # Such cases aren't reported by default.
+      # Default: false
+      check-type-assertions: false
+      # report about assignment of errors to blank identifier: 'num, _ := strconv.Atoi(numStr)'.
+      # Such cases aren't reported by default.
+      # Default: false
+      check-blank: false
+      # List of functions to exclude from checking, where each entry is a single function to exclude.
+      # See https://github.com/kisielk/errcheck#excluding-functions for details.
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - (*os.File).Close
+    exhaustive:
+      # Program elements to check for exhaustiveness.
+      # Default: [ switch ]
+      check:
+        - switch
+      # Presence of "default" case in switch statements satisfies exhaustiveness,
+      # even if all enum members are not listed.
+      # Default: false
+      default-signifies-exhaustive: true
+      # Enum members matching the supplied regex do not have to be listed in
+      # switch statements to satisfy exhaustiveness.
+      # Default: ""
+      ignore-enum-members: Example.+
+      # Enum types matching the supplied regex do not have to be listed in
+      # switch statements to satisfy exhaustiveness.
+      # Default: ""
+      ignore-enum-types: Example.+
+      default-case-required: true
+    goconst:
+      # Ignore the UNSPECIFIED string
+      ignore-string-values: UNSPECIFIED
+    gocritic:
+      enabled-checks:
+        - whyNoLint
+    godot:
+      # Comments to be checked: 'declarations', 'toplevel', or 'all'.
+      # Default: declarations
+      scope: all
+      # List of regexps for excluding particular comment lines from check.
+      # Default: []
+      exclude:
+        # Exclude todo and fixme comments.
+        - '.*FIXME:'
+        - '.*TODO:'
+        # Exclude comments that end in a special character.
+        - '[\p{P}\p{S}]$'
+      capital: true
+      # Check that each sentence ends with a period.
+      # Default: true
+      period: true
+    gosec:
+      excludes:
+        # Exclude G115 because it is known to give false positives
+        - G115
+    importas:
+      # List of aliases
+      # Default: []
+      alias:
+        - pkg: github.com/grpc-ecosystem/go-grpc-middleware/validator
+          alias: grpcvalidator
+        # Based on the regex rules below this package will alias to `go` without a concrete rule.
+        - pkg: github.com/minio/minio-go/v7
+          alias: minio
+        # Importas auto removes aliases that match the path of the repo even if the package is named differently.
+        - pkg: github.cwx.io/pipehat/miniotest
+          alias: miniotest
+        - pkg: github.cwx.io/pipehat/test
+          alias: testx
+        - pkg: github.cwx.io/pipehat/test/fixtures
+          alias: fx
+        - pkg: github.cwx.io/pipehat/validation
+          alias: validationx
+        #
+        # Regex path and alias,
+        # uses regular expression expansion syntax like below.
+        # see https://github.com/julz/importas#use-regular-expression for details
+        - pkg: github.cwx.io/pipehat/([^/]+)/internal/utilities
+          alias: util
+        # Match on last section of path using versioned import e.g 'v4',
+        # uses term in second last section of import on either whole word or word after first '-' as alias
+        # e.g 'packr' in 'github.com/gobuffalo/packr/v2'
+        # or 'validation' in 'github.com/go-ozzo/ozzo-validation/v4'
+        - pkg: (^.*(-|\/)(.*)\/.*(v[\d]+))
+          alias: $3
+        # Match on last word of import after '-'
+        # e.g 'migrate' from 'github.com/rubenv/sql-migrate'
+        - pkg: (^.*\/.*(-([^/]+$))(.*))
+          alias: $3
+        # Match on second last word and last word of import of events | event package
+        # e.g 'events' and 'table' from 'github.cwx.io/pipehat/pokertable/table/events'
+        - pkg: (^.*\/(.*)\/(events|event))
+          alias: $2$3
+        # match on 'fixtures'
+        # e.g 'github.cwx.io/pipehat/internal/fixtures'
+        - pkg: github.cwx.io/pipehat/(.*)/internal/(.*)fixtures
+          alias: f
+        # match on 'customerapi'
+        # e.g 'github.cwx.io/pipehat/casino/customerapi'
+        - pkg: github.cwx.io/pipehat/(.*)/customerapi
+          alias: customerapiimpl
+        # match on 'adminapi'
+        # e.g 'github.cwx.io/pipehat/casino/adminapi'
+        - pkg: github.cwx.io/pipehat/(.*)/adminapi
+          alias: adminapiimpl
+        # Match api import paths for command or event pkgs
+        # e.g 'github.cwx.io/pipehat/casinoapi/event' - alias casinoevent
+        - pkg: github.cwx.io/pipehat/(.*)api/(event|command)
+          alias: $1$2
+      # Do not allow unaliased imports of aliased packages.
+      # Default: false
+      no-unaliased: false
+      # Do not allow non-required aliases.
+      # Default: false
+      no-extra-aliases: true
+    lll:
+      # Max line length, lines longer will be reported.
+      # '\t' is counted as 1 character by default, and can be changed with the tab-width option.
+      # Default: 120.
+      line-length: 120
+      # Tab width in spaces.
+    # Default: 1
+      tab-width: 2
+    misspell:
+      # - restricted: checks only comments.
+      mode: restricted
+      # Correct spellings using locale preferences for US or UK.
+      # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+      # Default is to use a neutral variety of English.
+      locale: UK
+      # Extra word corrections.
+      # should only contain letters.
+      extra-words:
+        - typo: iff
+          correction: if
+      # Typos to ignore.
+      ignore-rules:
+        - mirrord
+    mnd:
+      # Ignore numbers
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "3"
+      # Ignore test files
+      ignored-files:
+        - .*_test.go
+        - .*/test/.*
+    nolintlint:
+      # require nolint directives to mention the specific linter being suppressed.
+      require-specific: true
+      # Enable to require an explanation of nonzero length after each nolint directive.
+      # We have this linted via gocritic, but will have linted here too.
+      # Default: false
+      require-explanation: true
+      # Disable to ensure that all nolint directives actually have an effect.
+      # Having this set to true means that the linter will not delete 'unused'
+      # nolint directives.
+      # Default: false
+      allow-unused: true
+    revive:
+      severity: warning
+      # See https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md for list of rule descriptions
+      rules:
+        - name: add-constant
+          arguments:
+            - allowInts: 0,1,2
+              allowStrs: '"","\n","%s/%s"'
+              maxLitCount: "3"
+          exclude:
+            - '**/*.pb.go'
+            - '**/*fixtures/*.go'
+            - '**/*_test.go'
+            - '*_test.go'
+        - name: comment-spacings
+          arguments:
+            - 'nolint:'
+        - name: duplicated-imports
+        - name: empty-lines
+        - name: error-naming
+        - name: confusing-naming
+        - name: get-return
+        - name: increment-decrement
+        - name: identical-branches
+        - name: redundant-import-alias
+        - name: if-return
+        - name: string-format
+          arguments:
+            - - core.WriteError[1].Message
+              - /^([^A-Z]|$)/
+              - must not start with a capital letter
+            - - fmt.Errorf[0]
+              - /(^|[^\.!?])$/
+              - must not end in punctuation
+            - - panic
+              - /^[^\n]*$/
+              - must not contain line breaks
+            - - dogma.AggregateCommandScope[1].Log
+              - /^([^A-Z]|$)/
+              - must not start with a capital letter
+            - - s.Log[0]
+              - '!/^(.*[A-Z][a-z]|$)/'
+              - must not use capital letters in log string
+            - - s.Log[0]
+              - /(^|[^\.!?])$/
+              - must not end in punctuation
+            - - validation.NewError[1]
+              - '!/^(.*[A-Z][a-z]|$)/'
+              - must not use capital letters in validation error
+        - name: string-of-int
+        - name: time-naming
+        - name: time-equal
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: useless-break
+        - name: var-declaration
+        - name: var-naming
+          arguments:
+            - - ID
+              - IDS
+            - []
+            - - upperCaseConst: true
+        - name: superfluous-else
+        - name: argument-limit
+          arguments:
+            - 15
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore = "*testing.T": null
+        - name: early-return
+          arguments:
+            - preserveScope
+        - name: indent-error-flow
+          arguments:
+            - preserveScope
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+            - sayRepetitiveInsteadOfStutters
+    staticcheck:
+      checks:
+        - all
+    tagalign:
+      align: true
+      sort: true
+    varnamelen:
+      max-distance: 6
+      check-receiver: true
+      ignore-names:
+        - db
+        - ok
+        - os
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+  exclusions:
+    # - `lax`: sources are excluded if they contain lines `autogenerated file`, `code generated`, `do not edit`, etc.
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+    rules:
+      # err113 - Ignore checking of dynamic errors in test files.
+      # any *_test.go file.
+      - linters:
+          - err113
+        path: (.+)_test.go
+        text: ^(do not define dynamic errors, use wrapped static errors instead:)
+      # revive - Ignore unused parameter, add-constant, or magic numbers issues in
+      # all test files or any file under /test/ directories.
+      - linters:
+          - revive
+        path: ((.+)(test\/(.*)|_test.go))
+        text: '^(unused-parameter|add-constant: avoid magic numbers like ''.*'', create a named constant for it)'
+      # gosec - Ignore the weak random number generation issue in all test files
+      # or any file under /test/ directories.
+      - linters:
+          - gosec
+        path: ((.+)(test\/(.*)|_test.go))
+        text: '^(G404: Use of weak random number generator \(math/rand or math/rand/v2 instead of crypto/rand\))'
+      # govet - Ignore printf non-constant format string.
+      - linters:
+          - govet
+        path: (.*)
+        text: '^(printf: non-constant format string)'
+      # staticcheck - Ignore package comment requirement.
+      - linters:
+          - staticcheck
+        text: 'ST1000'
+      # staticcheck - Ignore Id should be ID.
+      - linters:
+          - staticcheck
+        text: 'Id.* should be .*ID.*'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      # Section configuration to compare against.
+      # Section names are case-insensitive and may contain parameters in ().
+      # The default order of sections is 'standard > default > custom > blank > dot > alias > localmodule',
+      # If 'custom-order' is 'true', it follows the order of 'sections' option.
+      # Default: ["standard", "default"]
+      sections:
+        - standard
+        - default
+        - prefix(github.cwx.io/pipehat)
+        - prefix(github.com/dogmatiq)
+      # Enable custom order of sections.
+      # If 'true', make the section order the same as the order of 'sections'.
+      # Default: false
+      custom-order: true
+      # Drops lexical ordering for custom sections.
+      # Default: false
+      no-lex-order: false
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
