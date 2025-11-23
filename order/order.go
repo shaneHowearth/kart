@@ -12,7 +12,7 @@ import (
 
 // ProductGetter defines the contract for fetching product details.
 type ProductGetter interface {
-	GetProductById(id string) (product.Product, error)
+	GetProductByID(id string) (product.Product, error)
 }
 
 // Service provides business logic for order operations.
@@ -76,7 +76,7 @@ func (svc *Service) NewOrder(
 	productReferences := make([]ProductReference, 0, len(items))
 
 	for idx := range items {
-		productInfo, err := svc.productGetter.GetProductById(items[idx].ProductID)
+		productInfo, err := svc.productGetter.GetProductByID(items[idx].ProductID)
 		if err != nil {
 			// TODO: Not sure if this is a catastrophic error, or not.  Am
 			// treating it as catastrophic because order fulfilment, and
