@@ -16,7 +16,7 @@ type MockProductGetter struct {
 	err      error // To simulate errors.
 }
 
-func (m *MockProductGetter) GetProductById(id string) (product.Product, error) {
+func (m *MockProductGetter) GetProductByID(id string) (product.Product, error) {
 	if m.err != nil {
 		return product.Product{}, m.err
 	}
