@@ -44,6 +44,17 @@ func RegisterRoutes(
 	// Order routes.
 	mux.Handle("GET /api/order/{id}", CORSMiddleware(http.HandlerFunc(orderHandler.GetOrder)))
 	mux.Handle("POST /api/order", CORSMiddleware(http.HandlerFunc(orderHandler.CreateOrder)))
+	// Allow OPTIONS in order to prevent a CORS issue.
+	mux.Handle(
+		"OPTIONS /api/order",
+		CORSMiddleware(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				},
+			),
+		),
+	)
 
 	// Product routes.
 	mux.Handle("GET /api/product", CORSMiddleware(http.HandlerFunc(productHandler.ListProducts)))
