@@ -40,6 +40,10 @@ func main() {
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux, orderService, productService)
 
+	// Serve front end.
+	fs := http.FileServer(http.Dir("./web/build"))
+	mux.Handle("/", fs)
+
 	server := &http.Server{
 		Addr:              ":8080",
 		Handler:           mux,
