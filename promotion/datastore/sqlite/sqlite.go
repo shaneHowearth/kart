@@ -54,46 +54,90 @@ func (d *Driver) InitialiseDataStore() error {
 	return err
 }
 
-// GetCodeFileMatchCount returns the number of files that the code was found in.
-func (d *Driver) GetCodeFileMatchCount(code string) (int, error) {
-	var matchCount int
-
+// GetCodeFileMatchCounts returns the number of files that the code was found in.
+func (d *Driver) GetCodeFileMatchCounts(codes []string) (map[string]promotion.CacheResult, error) {
 	db, err := d.connect()
 	if err != nil {
-		return 0, fmt.Errorf("unable to connect when getting code validity with error: %w", err)
+		return nil, fmt.Errorf("unable to connect when getting code validity with error: %w", err)
 	}
 	defer db.Close()
 
-	query := "SELECT matchcount FROM promocode WHERE code = ?"
+	results := make(map[string]promotion.CacheResult)
 
-	row := db.QueryRow(query, code)
-	if err := row.Scan(&matchCount); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, err // Let the caller know that there were no rows found.
-		}
+	// Ensure the query has the right number of placeholders.
+	placeholders := make([]string, len(codes))
+	args := make([]any, len(codes))
 
-		return 0, fmt.Errorf("getting code validity for %s database query error: %w", code, err)
+	for i, code := range codes {
+		placeholders[i] = "?"
+		args[i] = code
+		results[code] = promotion.CacheResult{Found: false}
 	}
 
-	return matchCount, nil
+	query := fmt.Sprintf(
+		"SELECT code, matchcount FROM promocode WHERE code IN (%s)",
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("batch %v query error: %w", codes, err)
+	}
+	defer rows.Close()
+
+	// Populate the results with data.
+	for rows.Next() {
+		var code string
+		var matchCount int
+		if err := rows.Scan(&code, &matchCount); err != nil {
+			return nil, fmt.Errorf("scanning row error: %w", err)
+		}
+		results[code] = promotion.CacheResult{
+			MatchCount: matchCount,
+			Found:      true,
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating rows error: %w", err)
+	}
+
+	return results, nil
 }
 
-// AddCodeFileMatchCount caches the file match count for the given code.
-func (d *Driver) AddCodeFileMatchCount(code string, matchCount int) error {
+// AddCodeFileMatchCounts caches the file match counts for the given codes.
+func (d *Driver) AddCodeFileMatchCounts(codes map[string]int) error {
 	db, err := d.connect()
 	if err != nil {
 		return fmt.Errorf("unable to add code validity with error: %w", err)
 	}
 	defer db.Close()
 
-	const insertSQL = "INSERT INTO promocode(code, matchcount) VALUES(?, ?)"
-
-	_, err = db.Exec(insertSQL, code, matchCount)
+	// Start transaction for batch insert.
+	tx, err := db.Begin()
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return nil // Not an error, just skip it
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Rollback if not committed.
+
+	// Prepare statement once, reuse for all inserts.
+	stmt, err := tx.Prepare("INSERT INTO promocode(code, matchcount) VALUES(?, ?) ON CONFLICT(code) DO NOTHING")
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// Insert all codes.
+	for code, matchCount := range codes {
+		_, err := stmt.Exec(code, matchCount)
+		if err != nil {
+			return fmt.Errorf("failed to insert code %s: %w", code, err)
 		}
-		return err // Real error
+	}
+
+	// Commit transaction.
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
