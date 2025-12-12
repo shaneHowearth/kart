@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,18 @@ import (
 	"github.com/shanehowearth/kart/promotion"
 	"github.com/shanehowearth/kart/promotion/datastore/sqlite"
 )
+
+// Prepare some storage for the patterns passed in by users.
+type stringSlice []string
+
+func (s *stringSlice) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
 
 func main() {
 	// Initialise dependencies.
@@ -22,13 +35,18 @@ func main() {
 		log.Fatalf("cannot create a promotion search with error %v", err)
 	}
 
-	// Require a pattern and at least one file to be passed in.
-	if len(os.Args) < 3 {
-		log.Fatalf("Usage: %s <pattern> <file1> [file2] [file3]...\n", os.Args[0])
-	}
+	// Parse flags
+	var patterns stringSlice
+	flag.Var(&patterns, "p", "promotion code to search (can be specified multiple times)")
+	flag.Parse()
 
-	pattern := os.Args[1]
-	files := os.Args[2:]
+	// Remaining args are files
+	files := flag.Args()
+
+	if len(patterns) == 0 || len(files) == 0 {
+		// Require at least one pattern and at least one file to be passed in.
+		log.Fatalf("Usage: %s -p <pattern> [-p <pattern2>...] <file1> [file2] [file3]...\n", os.Args[0])
+	}
 
 	// Crude check that the files aren't gzipped.
 	// A deeper inspection is possible once the files have been opened, and the
@@ -43,10 +61,14 @@ func main() {
 		}
 	}
 
-	validity := "an invalid"
-	if promotionSearch.IsValid(pattern, files) {
-		validity = "a valid"
-	}
+	results := promotionSearch.IsValidBatch(patterns, files)
 
-	fmt.Printf("%s is %s coupon\n", pattern, validity)
+	for pattern, isValid := range results {
+		validity := "an invalid"
+		if isValid {
+			validity = "a valid"
+		}
+
+		fmt.Printf("%s is %s coupon\n", pattern, validity)
+	}
 }
