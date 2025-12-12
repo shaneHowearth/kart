@@ -1,7 +1,6 @@
 package promotion
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"sync"
@@ -27,23 +26,34 @@ func NewSearch(repo Store) (*Search, error) {
 // Result struct used by main to hold results from parallel file processing
 type FileResult struct {
 	FilePath string
-	Count    int
+	Counts   map[string]int
 	Err      error
 }
 
-func (s *Search) IsValid(pattern string, files []string) bool {
+func (s *Search) IsValidBatch(patterns []string, files []string) map[string]bool {
+	missedPatterns := []string{}
+	results := map[string]bool{}
+
 	// Check the cache.
-	cachedResult, err := s.repo.GetCodeFileMatchCount(pattern)
+	// TODO: What to do if there are partial misses.
+	cachedResults, err := s.repo.GetCodeFileMatchCounts(patterns)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			// Cache miss - continue to search files.
+		log.Println("Cache error, please fix %w", err)
+	}
+
+	for pattern, result := range cachedResults {
+		if result.Found {
+			// Cache hit - use cached value
+			results[pattern] = result.MatchCount >= minFileCount
 		} else {
-			// TODO: use slog to make this debug level logging.
-			log.Printf("cache lookup failed, performing fresh search: %v", err)
+			// Cache miss - need to search
+			missedPatterns = append(missedPatterns, pattern)
 		}
-	} else {
-		// Cache hit.
-		return cachedResult >= minFileCount
+	}
+
+	if len(missedPatterns) == 0 {
+		// nothing left to do.
+		return results
 	}
 
 	resultsChan := make(chan FileResult, len(files))
@@ -55,16 +65,15 @@ func (s *Search) IsValid(pattern string, files []string) bool {
 		// Launch a goroutine for each file search
 		go func(fp string) {
 			defer fileWg.Done()
-			count, err := SearchFileParallel(fp, pattern)
-			resultsChan <- FileResult{FilePath: fp, Count: count, Err: err}
+			counts, err := SearchFileParallel(fp, missedPatterns)
+			resultsChan <- FileResult{FilePath: fp, Counts: counts, Err: err}
 		}(filepath)
 	}
 
 	fileWg.Wait()
 	close(resultsChan)
 
-	filesWithMatchCount := 0
-
+	tmpResults := map[string]int{}
 	for res := range resultsChan {
 		if res.Err != nil {
 			// TODO: Need a requirement here, should the search keep on
@@ -78,16 +87,30 @@ func (s *Search) IsValid(pattern string, files []string) bool {
 			continue
 		}
 
-		if res.Count > 0 {
-			filesWithMatchCount++
+		for code, count := range res.Counts {
+			if count > 0 {
+				tmpResults[code]++
+			}
 		}
 	}
 
 	// Populate the cache.
-	if err := s.repo.AddCodeFileMatchCount(pattern, filesWithMatchCount); err != nil {
+	if err := s.repo.AddCodeFileMatchCounts(tmpResults); err != nil {
 		// only log the issue, the result has already been calculated.
 		log.Printf("Caching result failed with error: %v", err)
 	}
 
-	return filesWithMatchCount >= minFileCount
+	// Add results for patterns that were searched.
+	for k, v := range tmpResults {
+		results[k] = v >= minFileCount
+	}
+
+	// Add false for patterns that had zero matches.
+	for _, pattern := range missedPatterns {
+		if _, exists := results[pattern]; !exists {
+			results[pattern] = false
+		}
+	}
+
+	return results
 }
