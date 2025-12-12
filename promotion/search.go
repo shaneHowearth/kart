@@ -14,33 +14,37 @@ import (
 // SearchFileParallel searches files using concurrency.
 // File is mmapped for faster access (kernel manages access), and then broken up
 // into chunks that are then passed to goroutines to be searched.
-func SearchFileParallel(filepath string, pattern string) (int, error) {
+func SearchFileParallel(filepath string, patterns []string) (map[string]int, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to open file: %w", err)
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("failed to stat file: %w", err)
+		return nil, fmt.Errorf("failed to stat file: %w", err)
 	}
 	size := int(fi.Size())
 
 	if size == 0 {
-		return 0, nil
+		return map[string]int{}, nil
 	}
 
 	// Mmap the entire file.
+	// TODO: Add thoughts on advantages/disadvantages of using mmap.
 	fullData, err := unix.Mmap(int(f.Fd()), 0, size, unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
-		return 0, fmt.Errorf("failed to mmap file: %w", err)
+		return nil, fmt.Errorf("failed to mmap file: %w", err)
 	}
 	defer unix.Munmap(fullData)
 
 	// Note: This assumes that the file only contains uppercase codes.
 	// Need a requirement check that is correct.
-	upperPattern := []byte(strings.ToUpper(pattern))
+	upperPatterns := make([][]byte, 0, len(patterns))
+	for _, pattern := range patterns {
+		upperPatterns = append(upperPatterns, []byte(strings.ToUpper(pattern)))
+	}
 
 	// Determine parallelism
 	numCores := runtime.GOMAXPROCS(0)
@@ -52,16 +56,18 @@ func SearchFileParallel(filepath string, pattern string) (int, error) {
 
 	var wg sync.WaitGroup
 
-	countChan := make(chan int)
+	countChan := make(chan map[string]int)
 
 	var sumWg sync.WaitGroup
 	sumWg.Add(1)
 
-	totalMatches := 0
+	totalMatches := map[string]int{}
 	go func() {
 		defer sumWg.Done()
-		for count := range countChan {
-			totalMatches += count
+		for counts := range countChan {
+			for pattern, count := range counts {
+				totalMatches[pattern] += count
+			}
 		}
 	}()
 
@@ -84,7 +90,7 @@ func SearchFileParallel(filepath string, pattern string) (int, error) {
 		if currentEnd > currentStart {
 			wg.Add(1)
 			chunk := fullData[currentStart:currentEnd]
-			go SearchChunk(chunk, upperPattern, &wg, countChan)
+			go SearchChunks(chunk, upperPatterns, &wg, countChan)
 
 			currentStart = currentEnd
 		}
@@ -105,12 +111,11 @@ func SearchFileParallel(filepath string, pattern string) (int, error) {
 // The string matching is by bytes, converting to runes will cause allocations
 // and slow things down, and would only be useful is we were looking for the nth
 // character.
-func SearchChunk(data []byte, pattern []byte, wg *sync.WaitGroup, countChan chan<- int) {
+func SearchChunks(data []byte, patterns [][]byte, wg *sync.WaitGroup, countChan chan<- map[string]int) {
 	defer wg.Done()
 
-	matchCount := 0
-	patternLen := len(pattern)
 	currentOffset := 0
+	matches := map[string]int{}
 
 	for currentOffset < len(data) {
 		// Find the next newline character (end of the current line within the chunk)
@@ -127,23 +132,15 @@ func SearchChunk(data []byte, pattern []byte, wg *sync.WaitGroup, countChan chan
 			currentOffset = currentOffset + lineEnd + 1 // Move offset past the newline
 		}
 
-		lineSearchIndex := 0
-		for lineSearchIndex < len(line) {
+		for i, pattern := range patterns {
 			// Case insensitive search - pattern is already UCase, and files are
 			// assumed to be UCase codes only.
-			matchIdx := bytes.Index(line[lineSearchIndex:], pattern)
-
-			if matchIdx == -1 {
-				break
+			if bytes.Equal(line, pattern) {
+				matches[string(patterns[i])]++
 			}
-
-			matchCount++ // Increment count for each occurrence
-
-			// Advance the search index past the found pattern to avoid counting overlaps
-			lineSearchIndex += matchIdx + patternLen
 		}
 	}
 
 	// Send the total non-overlapping occurrences found in this chunk
-	countChan <- matchCount
+	countChan <- matches
 }
