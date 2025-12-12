@@ -32,7 +32,28 @@ func SearchFileParallel(filepath string, patterns []string) (map[string]int, err
 	}
 
 	// Mmap the entire file.
-	// TODO: Add thoughts on advantages/disadvantages of using mmap.
+	// For an excellent discussion see: https://news.ycombinator.com/item?id=45687796
+	//
+	// mmap advantages for this use case:
+	//   - OS page cache: Repeated searches of the same files are very fast (data already in memory)
+	//   - Zero-copy: No kernel→userspace data copying unlike read() syscalls
+	//   - Parallel access: Multiple goroutines can safely read different file regions simultaneously
+	//   - Simplicity: Treat file as []byte slice, use standard bytes package operations
+	//
+	// mmap trade-offs:
+	//   - Platform-specific: unix.Mmap only works on Unix-like systems (Linux, macOS, BSD)
+	//   - Go runtime interaction: Page faults block OS threads without yielding to other goroutines,
+	//     causing latency spikes if data isn't memory-resident. This is less of an issue when
+	//     files fit in RAM or are already cached.
+	//   - First access overhead: Initial page faults have latency until kernel loads pages
+	//   - Sequential read performance: For purely sequential access, buffered read() with proper
+	//     hints can provide better read-ahead than mmap's page fault pattern
+	//
+	// Alternative approaches:
+	//   - io_uring (Linux-only): Similar performance with better async support and cross-platform path
+	//   - Buffered read() with worker pool: More portable, Go runtime can reschedule during I/O
+	//   - For this assignment: mmap is optimal given read-heavy, multi-GB files, parallel access pattern
+
 	fullData, err := unix.Mmap(int(f.Fd()), 0, size, unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mmap file: %w", err)
