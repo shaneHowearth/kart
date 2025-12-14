@@ -12,7 +12,7 @@ import (
 
 // ProductGetter defines the contract for fetching product details.
 type ProductGetter interface {
-	GetProductByID(id string) (product.Product, error)
+	GetProductsByIDs(id []string) ([]product.Product, []string, error)
 }
 
 // Service provides business logic for order operations.
@@ -75,21 +75,40 @@ func (svc *Service) NewOrder(
 	// Fetch current product information for this order.
 	productReferences := make([]ProductReference, 0, len(items))
 
-	for idx := range items {
-		productInfo, err := svc.productGetter.GetProductByID(items[idx].ProductID)
-		if err != nil {
-			// TODO: Not sure if this is a catastrophic error, or not.  Am
-			// treating it as catastrophic because order fulfilment, and
-			// billing, will be compromised.
-			return Order{}, fmt.Errorf("%w product %s not found: %v", ErrCreateFailed, items[idx].ProductID, err)
-		}
+	productIDs := []string{}
 
+	for idx := range items {
+		productIDs = append(productIDs, items[idx].ProductID)
+	}
+
+	productList, missed, err := svc.productGetter.GetProductsByIDs(productIDs)
+	if err != nil {
+		// TODO: Not sure if this is a catastrophic error, or not.  Am
+		// treating it as catastrophic because order fulfilment, and
+		// billing, will be compromised.
+		return Order{}, fmt.Errorf("%w product list %v not found: %v", ErrCreateFailed, productIDs, err)
+	}
+
+	for _, productInfo := range productList {
 		productReferences = append(productReferences, ProductReference{
 			ID:         productInfo.ID,
 			Name:       productInfo.Name,
 			PriceCents: productInfo.PriceCents,
 			Category:   productInfo.Category,
 		})
+
+	}
+
+	for _, missedId := range missed {
+		// TODO: Need clarification on how to handle orders with ids that are
+		// not matched to any known products.
+		log.Printf("Product with ID %s not found", missedId)
+	}
+
+	if len(productReferences) == 0 {
+		// TODO: Assuming that no products found means that no order can be
+		// made.
+		return Order{}, fmt.Errorf("%w product list %v not found: %v", ErrCreateFailed, productIDs, err)
 	}
 
 	orderID := uuid.New().String()
@@ -101,7 +120,7 @@ func (svc *Service) NewOrder(
 		Products: productReferences,
 	}
 
-	err := svc.repo.CreateOrder(&newOrder)
+	err = svc.repo.CreateOrder(&newOrder)
 	if err != nil {
 		// TODO: Need clarification on surfacing repository errors to the caller.
 		// log full error here and return simpler error.

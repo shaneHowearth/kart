@@ -42,11 +42,12 @@ func (ps *Service) GetAvailableProducts() ([]Product, error) {
 	return products, nil
 }
 
-// GetProductByID gets a single product by its ID.
-func (ps *Service) GetProductByID(id string) (Product, error) {
-	product, err := ps.repo.GetByID(id)
+// GetProductsByIDs gets the product details identified by the list of
+// ProductIds..
+func (ps *Service) GetProductsByIDs(productIds []string) ([]Product, []string, error) {
+	products, missed, err := ps.repo.GetByIDs(productIds)
 
 	// TODO: Business logic would go here.
 
-	return product, err
+	return products, missed, err
 }
