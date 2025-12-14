@@ -11,7 +11,7 @@ import (
 // It serves as the adapter to fulfil the data contract defined by the core domain.
 type InMemoryProductStore struct {
 	// mu ensures the products map accesses are thread safe.
-	// Only going to be usefule when mutation functions are added to the
+	// Only going to be useful when mutation functions are added to the
 	// interface.
 	mu sync.RWMutex
 	// products is the in memory store. k=Product ID, v = Product.
@@ -43,17 +43,29 @@ func NewInMemoryProductStore() *InMemoryProductStore {
 	}
 }
 
-// GetByID retreives a product by its id.
-func (imps *InMemoryProductStore) GetByID(id string) (product.Product, error) {
+// GetByIDs retrieves a set of products by their ProductIds.
+func (imps *InMemoryProductStore) GetByIDs(ids []string) ([]product.Product, []string, error) {
 	// Take a read lock on the map, and release when the function exits.
 	imps.mu.RLock()
 	defer imps.mu.RUnlock()
 
-	if product, ok := imps.products[id]; ok {
-		return *product, nil
+	products := make([]product.Product, 0, len(ids))
+	missed := []string{}
+
+	for _, id := range ids {
+		if product, ok := imps.products[id]; ok {
+			products = append(products, *product)
+		} else {
+			missed = append(missed, id)
+		}
 	}
 
-	return product.Product{}, product.ErrNotFound
+	var err error
+	if len(products) == 0 {
+		err = product.ErrNotFound
+	}
+
+	return products, missed, err
 }
 
 // List returns a list of all the products in the datastore.

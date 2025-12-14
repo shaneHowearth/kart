@@ -8,40 +8,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetByID(t *testing.T) {
+func TestGetByIDs(t *testing.T) {
 	testcases := map[string]struct {
 		id              string
-		expectedProduct product.Product
+		expectedProduct []product.Product
 		expectedError   error
 	}{
 		"Successfully fetch product 2": {
 			id:              "2",
-			expectedProduct: datastore.SeedProducts[2],
+			expectedProduct: []product.Product{datastore.SeedProducts[2]},
 		},
 		"Fail to fetch non-existant product": {
 			id:              "does-not-exist",
-			expectedProduct: product.Product{},
+			expectedProduct: []product.Product{},
 			expectedError:   product.ErrNotFound,
 		},
 	}
 	for name, tc := range testcases { //nolint:varnamelen // tc is fine in a test.
 		t.Run(name, func(t *testing.T) {
 			imps := datastore.NewSeededInMemoryProductStore()
-			actualProduct, actualError := imps.GetByID(tc.id)
+			actualProduct, _, actualError := imps.GetByIDs([]string{tc.id})
 
 			if tc.expectedError != nil {
 				assert.ErrorIsf(
 					t,
-					tc.expectedError,
 					actualError,
+					tc.expectedError,
 					"expected error %v, but got %v",
 					tc.expectedError, actualError,
 				)
 
 				assert.EqualExportedValuesf(
 					t,
-					tc.expectedProduct,
 					actualProduct,
+					tc.expectedProduct,
 					"expected product to match %#v but got %#v",
 					tc.expectedProduct, actualProduct,
 				)
