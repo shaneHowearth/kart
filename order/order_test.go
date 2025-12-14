@@ -16,16 +16,24 @@ type MockProductGetter struct {
 	err      error // To simulate errors.
 }
 
-func (m *MockProductGetter) GetProductByID(id string) (product.Product, error) {
+func (m *MockProductGetter) GetProductsByIDs(ids []string) ([]product.Product, []string, error) {
 	if m.err != nil {
-		return product.Product{}, m.err
+		return []product.Product{}, []string{}, m.err
 	}
 
-	if p, ok := m.products[id]; ok {
-		return p, nil
+	products := []product.Product{}
+	missed := []string{}
+
+	for _, id := range ids {
+		if p, ok := m.products[id]; ok {
+			products = append(products, p)
+		} else {
+			missed = append(missed, id)
+		}
+
 	}
 
-	return product.Product{}, product.ErrNotFound
+	return products, missed, nil
 }
 
 type MockOrderStore struct {
@@ -62,6 +70,7 @@ func TestNewOrderService(t *testing.T) {
 			productGetter: &MockProductGetter{
 				products: map[string]product.Product{
 					"1": {ID: "1", Name: "Test", PriceCents: 100},
+					"2": {ID: "2", Name: "Test-2", PriceCents: 200},
 				},
 			},
 		},
