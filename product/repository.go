@@ -12,8 +12,8 @@ var ErrNotFound = errors.New("product not found")
 // Store defines the contract for persistent storage operations related
 // to the Product entity.
 type Store interface {
-	// Get a product by id.
-	GetByID(id string) (Product, error)
+	// Get a list of products by their ids.
+	GetByIDs(ids []string) ([]Product, []string, error)
 
 	// List all products.
 	List() []Product
