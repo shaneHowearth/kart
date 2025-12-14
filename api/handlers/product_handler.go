@@ -67,23 +67,38 @@ func (h *ProductHandler) ListProducts(writer http.ResponseWriter, _ *http.Reques
 
 // GetProduct gets a single product.
 func (h *ProductHandler) GetProduct(writer http.ResponseWriter, request *http.Request) {
+	// TODO: Allow multiple ids to be specified.
 	id := request.PathValue("id")
 
-	fetchedProduct, err := h.productService.GetProductByID(id)
+	fetchedProducts, missed, err := h.productService.GetProductsByIDs([]string{id})
 	if err != nil {
-		http.Error(writer, "product not found", http.StatusNotFound)
+		// Unexpected error (database failure, etc.)
+		http.Error(writer, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	productResponse := ProductResponse{}
-	productResponse.ID = fetchedProduct.ID
-	productResponse.Name = fetchedProduct.Name
-	productResponse.Category = fetchedProduct.Category
-	productResponse.PriceDisplay = formatPrice(fetchedProduct.PriceCents)
+	productsResponse := []ProductResponse{}
+	for _, fetchedProduct := range fetchedProducts {
+		productResponse := ProductResponse{}
+		productResponse.ID = fetchedProduct.ID
+		productResponse.Name = fetchedProduct.Name
+		productResponse.Category = fetchedProduct.Category
+		productResponse.PriceDisplay = formatPrice(fetchedProduct.PriceCents)
+		productsResponse = append(productsResponse, productResponse)
+	}
 
 	writer.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(writer).Encode(productResponse); err != nil {
+	// Return whatever was found (might be empty array)
+	response := struct {
+		Products []ProductResponse `json:"products"`
+		NotFound []string          `json:"not found"`
+	}{
+		Products: productsResponse,
+		NotFound: missed,
+	}
+
+	if err := json.NewEncoder(writer).Encode(response); err != nil {
 		log.Printf("GetProduct Encoding JSON failed failed: %v", err)
 	}
 }
